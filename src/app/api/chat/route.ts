@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 // 型定義
 interface ChatMessage {
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest) {
     const body: RequestBody = await request.json();
     const { messages, images = [], providers } = body;
 
+    // Get environment variables from Cloudflare context
+    const { env } = await getCloudflareContext();
+
     // 選択されたプロバイダーのリスト
     const selectedProviders: string[] = [];
     if (providers.anthropic) selectedProviders.push('anthropic');
@@ -52,7 +56,7 @@ export async function POST(request: NextRequest) {
         // 各プロバイダーを並列実行し、完了次第送信
         if (providers.anthropic) {
           promises.push(
-            callAnthropic(messages, images).then((result) => {
+            callAnthropic(messages, images, env).then((result) => {
               const data = JSON.stringify(result) + '\n';
               controller.enqueue(encoder.encode(data));
             })
@@ -61,7 +65,7 @@ export async function POST(request: NextRequest) {
 
         if (providers.gemini) {
           promises.push(
-            callGemini(messages, images).then((result) => {
+            callGemini(messages, images, env).then((result) => {
               const data = JSON.stringify(result) + '\n';
               controller.enqueue(encoder.encode(data));
             })
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
 
         if (providers.openai) {
           promises.push(
-            callOpenAI(messages, images).then((result) => {
+            callOpenAI(messages, images, env).then((result) => {
               const data = JSON.stringify(result) + '\n';
               controller.enqueue(encoder.encode(data));
             })
@@ -101,10 +105,11 @@ export async function POST(request: NextRequest) {
 // Anthropic Claude API呼び出し
 async function callAnthropic(
   messages: ChatMessage[],
-  images: string[]
+  images: string[],
+  env: any
 ): Promise<ProviderResponse> {
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY is not set');
     }
@@ -167,10 +172,11 @@ async function callAnthropic(
 // Google Gemini API呼び出し
 async function callGemini(
   messages: ChatMessage[],
-  images: string[]
+  images: string[],
+  env: any
 ): Promise<ProviderResponse> {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not set');
     }
@@ -220,10 +226,11 @@ async function callGemini(
 // OpenAI API呼び出し
 async function callOpenAI(
   messages: ChatMessage[],
-  images: string[]
+  images: string[],
+  env: any
 ): Promise<ProviderResponse> {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY is not set');
     }
